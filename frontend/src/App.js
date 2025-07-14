@@ -80,8 +80,12 @@ const App = () => {
   const [showSuggestionForm, setShowSuggestionForm] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showEditGearModal, setShowEditGearModal] = useState(false);
+  const [editingGear, setEditingGear] = useState(null);
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'modérateur' });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('name');
 
   const { user, login, logout, loading } = useAuth();
 
@@ -103,10 +107,10 @@ const App = () => {
 
   // Categories
   const categories = [
-    { id: 'joueurs', name: 'Joueurs', icon: '👥' },
-    { id: 'modérateur', name: 'Modérateur', icon: '🛡️' },
-    { id: 'événements', name: 'Événements', icon: '🎉' },
-    { id: 'interdits', name: 'Interdits', icon: '🚫' }
+    { id: 'joueurs', name: 'Joueurs', icon: '👥', color: 'from-blue-500 to-blue-600' },
+    { id: 'modérateur', name: 'Modérateur', icon: '🛡️', color: 'from-purple-500 to-purple-600' },
+    { id: 'événements', name: 'Événements', icon: '🎉', color: 'from-orange-500 to-orange-600' },
+    { id: 'interdits', name: 'Interdits', icon: '🚫', color: 'from-red-500 to-red-600' }
   ];
 
   // Fetch gears
@@ -269,6 +273,77 @@ const App = () => {
     }
   };
 
+  // Edit gear
+  const editGear = (gear) => {
+    setEditingGear(gear);
+    setShowEditGearModal(true);
+  };
+
+  // Update gear
+  const updateGear = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/gears/${editingGear.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: JSON.stringify(editingGear),
+      });
+
+      if (response.ok) {
+        alert('Gear mis à jour avec succès !');
+        setShowEditGearModal(false);
+        setEditingGear(null);
+        fetchGears();
+      } else {
+        alert('Erreur lors de la mise à jour du gear');
+      }
+    } catch (error) {
+      console.error('Error updating gear:', error);
+    }
+  };
+
+  // Delete gear
+  const deleteGear = async (gearId) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce gear ?')) {
+      try {
+        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/gears/${gearId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${user.token}`
+          }
+        });
+
+        if (response.ok) {
+          alert('Gear supprimé avec succès !');
+          fetchGears();
+        } else {
+          alert('Erreur lors de la suppression du gear');
+        }
+      } catch (error) {
+        console.error('Error deleting gear:', error);
+      }
+    }
+  };
+
+  // Filter and sort gears
+  const filteredGears = gears
+    .filter(gear => gear.category === selectedCategory)
+    .filter(gear => 
+      gear.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      gear.nickname.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      gear.description.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'nickname') return a.nickname.localeCompare(b.nickname);
+      if (sortBy === 'created_at') return new Date(b.created_at) - new Date(a.created_at);
+      return 0;
+    });
+
   // Effects
   useEffect(() => {
     fetchGears();
@@ -282,10 +357,13 @@ const App = () => {
   }, [user]);
 
   if (loading) {
-    return <div className="loading">Chargement...</div>;
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Chargement du Center French Gear Hub...</p>
+      </div>
+    );
   }
-
-  const filteredGears = gears.filter(gear => gear.category === selectedCategory);
 
   return (
     <div className={`app ${isDarkMode ? 'dark' : 'light'}`}>
@@ -293,23 +371,32 @@ const App = () => {
       <header className="header">
         <div className="header-content">
           <div className="header-left">
-            <img 
-              src="https://i.imgur.com/XZWXmBV.png" 
-              alt="Center French"
-              className="logo"
-            />
-            <h1>Center French - Gear Hub</h1>
+            <div className="logo-container">
+              <img 
+                src="https://i.imgur.com/XZWXmBV.png" 
+                alt="Center French"
+                className="logo"
+              />
+              <div className="logo-text">
+                <h1>Center French</h1>
+                <span className="subtitle">Gear Hub</span>
+              </div>
+            </div>
           </div>
           <div className="header-right">
             <button 
               className="theme-toggle"
               onClick={() => setIsDarkMode(!isDarkMode)}
+              title={isDarkMode ? 'Mode clair' : 'Mode sombre'}
             >
-              {isDarkMode ? '🌞' : '🌙'}
+              {isDarkMode ? '☀️' : '🌙'}
             </button>
             {user ? (
               <div className="user-menu">
-                <span>Bienvenue, {user.role}</span>
+                <div className="user-info">
+                  <span className="user-role">{user.role}</span>
+                  <span className="user-status">Connecté</span>
+                </div>
                 <button onClick={logout} className="logout-btn">
                   Déconnexion
                 </button>
@@ -319,6 +406,7 @@ const App = () => {
                 onClick={() => setShowLoginForm(true)}
                 className="login-btn"
               >
+                <span>🔐</span>
                 Connexion
               </button>
             )}
@@ -329,34 +417,67 @@ const App = () => {
       {/* Navigation */}
       <nav className="nav">
         <div className="nav-content">
-          <button 
-            className={`nav-btn ${activeTab === 'gears' ? 'active' : ''}`}
-            onClick={() => setActiveTab('gears')}
-          >
-            Gears
-          </button>
-          <button 
-            className="nav-btn"
-            onClick={() => setShowSuggestionForm(true)}
-          >
-            Faire une suggestion
-          </button>
-          {user && (
+          <div className="nav-left">
             <button 
-              className={`nav-btn ${activeTab === 'suggestions' ? 'active' : ''}`}
-              onClick={() => setActiveTab('suggestions')}
+              className={`nav-btn ${activeTab === 'gears' ? 'active' : ''}`}
+              onClick={() => setActiveTab('gears')}
             >
-              Suggestions ({suggestions.filter(s => s.status === 'pending').length})
+              <span>⚔️</span>
+              Gears
             </button>
-          )}
-          {user && user.role === 'créateur' && (
             <button 
-              className={`nav-btn ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveTab('users')}
+              className="nav-btn suggestion-btn"
+              onClick={() => setShowSuggestionForm(true)}
             >
-              Utilisateurs
+              <span>💡</span>
+              Faire une suggestion
             </button>
-          )}
+            {user && (
+              <button 
+                className={`nav-btn ${activeTab === 'suggestions' ? 'active' : ''}`}
+                onClick={() => setActiveTab('suggestions')}
+              >
+                <span>📝</span>
+                Suggestions
+                {suggestions.filter(s => s.status === 'pending').length > 0 && (
+                  <span className="notification-badge">
+                    {suggestions.filter(s => s.status === 'pending').length}
+                  </span>
+                )}
+              </button>
+            )}
+            {user && user.role === 'créateur' && (
+              <button 
+                className={`nav-btn ${activeTab === 'users' ? 'active' : ''}`}
+                onClick={() => setActiveTab('users')}
+              >
+                <span>👥</span>
+                Utilisateurs
+              </button>
+            )}
+          </div>
+          <div className="nav-right">
+            {activeTab === 'gears' && (
+              <div className="search-controls">
+                <input
+                  type="text"
+                  placeholder="Rechercher un gear..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="sort-select"
+                >
+                  <option value="name">Trier par nom</option>
+                  <option value="nickname">Trier par surnom</option>
+                  <option value="created_at">Plus récent</option>
+                </select>
+              </div>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -372,8 +493,15 @@ const App = () => {
                   className={`category-btn ${selectedCategory === category.id ? 'active' : ''}`}
                   onClick={() => setSelectedCategory(category.id)}
                 >
-                  <span className="category-icon">{category.icon}</span>
-                  <span>{category.name}</span>
+                  <div className={`category-gradient bg-gradient-to-r ${category.color}`}>
+                    <span className="category-icon">{category.icon}</span>
+                  </div>
+                  <div className="category-info">
+                    <span className="category-name">{category.name}</span>
+                    <span className="category-count">
+                      {gears.filter(g => g.category === category.id).length} gears
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -384,18 +512,42 @@ const App = () => {
                 <div key={gear.id} className="gear-card">
                   <div className="gear-image">
                     <img src={gear.image_url} alt={gear.name} />
+                    {user && (user.role === 'créateur' || user.role === 'responsable') && (
+                      <div className="gear-actions">
+                        <button 
+                          className="edit-btn"
+                          onClick={() => editGear(gear)}
+                          title="Modifier"
+                        >
+                          ✏️
+                        </button>
+                        <button 
+                          className="delete-btn"
+                          onClick={() => deleteGear(gear.id)}
+                          title="Supprimer"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="gear-info">
                     <h3>{gear.name}</h3>
                     <p className="nickname">"{gear.nickname}"</p>
-                    <p className="gear-id">ID: {gear.gear_id}</p>
+                    <div className="gear-id-container">
+                      <span className="gear-id">ID: {gear.gear_id}</span>
+                    </div>
                     <p className="description">{gear.description}</p>
                     {selectedCategory !== 'interdits' && (
                       <button 
                         className="copy-btn"
-                        onClick={() => copyToClipboard(gear.gear_id)}
+                        onClick={() => {
+                          copyToClipboard(gear.gear_id);
+                          alert('ID copié dans le presse-papier !');
+                        }}
                       >
-                        📋 Copier l'ID
+                        <span>📋</span>
+                        Copier l'ID
                       </button>
                     )}
                   </div>
@@ -405,7 +557,14 @@ const App = () => {
 
             {filteredGears.length === 0 && (
               <div className="empty-state">
-                <p>Aucun gear trouvé dans cette catégorie.</p>
+                <div className="empty-icon">🔍</div>
+                <h3>Aucun gear trouvé</h3>
+                <p>
+                  {searchTerm ? 
+                    `Aucun gear ne correspond à "${searchTerm}" dans cette catégorie.` : 
+                    'Aucun gear dans cette catégorie pour le moment.'
+                  }
+                </p>
               </div>
             )}
           </div>
@@ -413,80 +572,122 @@ const App = () => {
 
         {activeTab === 'suggestions' && user && (
           <div className="suggestions-section">
-            <h2>Suggestions en attente</h2>
+            <div className="section-header">
+              <h2>Suggestions en attente</h2>
+              <div className="stats">
+                <span className="stat">
+                  {suggestions.filter(s => s.status === 'pending').length} en attente
+                </span>
+                <span className="stat">
+                  {suggestions.filter(s => s.status === 'approved').length} approuvées
+                </span>
+                <span className="stat">
+                  {suggestions.filter(s => s.status === 'rejected').length} rejetées
+                </span>
+              </div>
+            </div>
+            
             <div className="suggestions-grid">
               {suggestions.filter(s => s.status === 'pending').map(suggestion => (
                 <div key={suggestion.id} className="suggestion-card">
                   <div className="suggestion-image">
                     <img src={suggestion.image_url} alt={suggestion.name} />
+                    <div className="suggestion-status pending">En attente</div>
                   </div>
                   <div className="suggestion-info">
                     <h3>{suggestion.name}</h3>
                     <p className="nickname">"{suggestion.nickname}"</p>
                     <p className="gear-id">ID: {suggestion.gear_id}</p>
                     <p className="description">{suggestion.description}</p>
-                    <p className="category">Catégorie: {suggestion.category}</p>
+                    <div className="suggestion-category">
+                      <span>Catégorie: </span>
+                      <span className="category-badge">{suggestion.category}</span>
+                    </div>
                     {user.role === 'créateur' || user.role === 'responsable' ? (
                       <div className="suggestion-actions">
                         <button 
                           className="approve-btn"
                           onClick={() => approveSuggestion(suggestion.id)}
                         >
-                          ✅ Approuver
+                          <span>✅</span>
+                          Approuver
                         </button>
                         <button 
                           className="reject-btn"
                           onClick={() => rejectSuggestion(suggestion.id)}
                         >
-                          ❌ Rejeter
+                          <span>❌</span>
+                          Rejeter
                         </button>
                       </div>
                     ) : (
-                      <p className="pending-status">En attente de validation</p>
+                      <div className="pending-status">
+                        <span>⏳</span>
+                        En attente de validation
+                      </div>
                     )}
                   </div>
                 </div>
               ))}
             </div>
+
+            {suggestions.filter(s => s.status === 'pending').length === 0 && (
+              <div className="empty-state">
+                <div className="empty-icon">✨</div>
+                <h3>Aucune suggestion en attente</h3>
+                <p>Toutes les suggestions ont été traitées.</p>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'users' && user && user.role === 'créateur' && (
           <div className="users-section">
-            <h2>Gestion des utilisateurs</h2>
+            <div className="section-header">
+              <h2>Gestion des utilisateurs</h2>
+              <div className="stats">
+                <span className="stat">
+                  {users.length} utilisateurs
+                </span>
+              </div>
+            </div>
             
             {/* Create User Form */}
             <div className="create-user-form">
               <h3>Créer un nouvel utilisateur</h3>
               <form onSubmit={createUser}>
-                <div className="form-group">
-                  <input
-                    type="text"
-                    placeholder="Nom d'utilisateur"
-                    value={newUser.username}
-                    onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <input
-                    type="password"
-                    placeholder="Mot de passe"
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <select
-                    value={newUser.role}
-                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                  >
-                    <option value="modérateur">Modérateur</option>
-                    <option value="responsable">Responsable</option>
-                  </select>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Nom d'utilisateur</label>
+                    <input
+                      type="text"
+                      value={newUser.username}
+                      onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Mot de passe</label>
+                    <input
+                      type="password"
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Rôle</label>
+                    <select
+                      value={newUser.role}
+                      onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                    >
+                      <option value="modérateur">Modérateur</option>
+                      <option value="responsable">Responsable</option>
+                    </select>
+                  </div>
                 </div>
                 <button type="submit" className="create-user-btn">
+                  <span>➕</span>
                   Créer l'utilisateur
                 </button>
               </form>
@@ -498,9 +699,18 @@ const App = () => {
               <div className="users-grid">
                 {users.map(userItem => (
                   <div key={userItem.id} className="user-card">
-                    <h4>{userItem.username}</h4>
-                    <p>Rôle: {userItem.role}</p>
-                    <p>Créé le: {new Date(userItem.created_at).toLocaleDateString()}</p>
+                    <div className="user-avatar">
+                      <span>{userItem.username.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="user-details">
+                      <h4>{userItem.username}</h4>
+                      <span className={`role-badge ${userItem.role}`}>
+                        {userItem.role}
+                      </span>
+                      <p className="user-date">
+                        Créé le {new Date(userItem.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -508,6 +718,90 @@ const App = () => {
           </div>
         )}
       </main>
+
+      {/* Edit Gear Modal */}
+      {showEditGearModal && editingGear && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Modifier le gear</h2>
+              <button 
+                className="close-btn"
+                onClick={() => setShowEditGearModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={updateGear}>
+              <div className="form-group">
+                <label>Nom du gear</label>
+                <input
+                  type="text"
+                  value={editingGear.name}
+                  onChange={(e) => setEditingGear({...editingGear, name: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Surnom</label>
+                <input
+                  type="text"
+                  value={editingGear.nickname}
+                  onChange={(e) => setEditingGear({...editingGear, nickname: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>ID du gear</label>
+                <input
+                  type="text"
+                  value={editingGear.gear_id}
+                  onChange={(e) => setEditingGear({...editingGear, gear_id: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>URL de l'image</label>
+                <input
+                  type="url"
+                  value={editingGear.image_url}
+                  onChange={(e) => setEditingGear({...editingGear, image_url: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={editingGear.description}
+                  onChange={(e) => setEditingGear({...editingGear, description: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Catégorie</label>
+                <select
+                  value={editingGear.category}
+                  onChange={(e) => setEditingGear({...editingGear, category: e.target.value})}
+                >
+                  <option value="joueurs">Joueurs</option>
+                  <option value="modérateur">Modérateur</option>
+                  <option value="événements">Événements</option>
+                  <option value="interdits">Interdits</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={() => setShowEditGearModal(false)}>
+                  Annuler
+                </button>
+                <button type="submit" className="submit-btn">
+                  <span>💾</span>
+                  Sauvegarder
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Suggestion Form Modal */}
       {showSuggestionForm && (
@@ -524,50 +818,51 @@ const App = () => {
             </div>
             <form onSubmit={submitSuggestion}>
               <div className="form-group">
+                <label>Nom du gear</label>
                 <input
                   type="text"
-                  placeholder="Nom du gear"
                   value={suggestionForm.name}
                   onChange={(e) => setSuggestionForm({...suggestionForm, name: e.target.value})}
                   required
                 />
               </div>
               <div className="form-group">
+                <label>Surnom du gear</label>
                 <input
                   type="text"
-                  placeholder="Surnom du gear"
                   value={suggestionForm.nickname}
                   onChange={(e) => setSuggestionForm({...suggestionForm, nickname: e.target.value})}
                   required
                 />
               </div>
               <div className="form-group">
+                <label>ID du gear</label>
                 <input
                   type="text"
-                  placeholder="ID du gear"
                   value={suggestionForm.gear_id}
                   onChange={(e) => setSuggestionForm({...suggestionForm, gear_id: e.target.value})}
                   required
                 />
               </div>
               <div className="form-group">
+                <label>URL de l'image</label>
                 <input
                   type="url"
-                  placeholder="URL de l'image"
                   value={suggestionForm.image_url}
                   onChange={(e) => setSuggestionForm({...suggestionForm, image_url: e.target.value})}
                   required
                 />
               </div>
               <div className="form-group">
+                <label>Description du gear</label>
                 <textarea
-                  placeholder="Description du gear"
                   value={suggestionForm.description}
                   onChange={(e) => setSuggestionForm({...suggestionForm, description: e.target.value})}
                   required
                 />
               </div>
               <div className="form-group">
+                <label>Catégorie</label>
                 <select
                   value={suggestionForm.category}
                   onChange={(e) => setSuggestionForm({...suggestionForm, category: e.target.value})}
@@ -578,9 +873,15 @@ const App = () => {
                   <option value="interdits">Interdits</option>
                 </select>
               </div>
-              <button type="submit" className="submit-btn">
-                Envoyer la suggestion
-              </button>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={() => setShowSuggestionForm(false)}>
+                  Annuler
+                </button>
+                <button type="submit" className="submit-btn">
+                  <span>📤</span>
+                  Envoyer la suggestion
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -601,26 +902,32 @@ const App = () => {
             </div>
             <form onSubmit={handleLogin}>
               <div className="form-group">
+                <label>Nom d'utilisateur</label>
                 <input
                   type="text"
-                  placeholder="Nom d'utilisateur"
                   value={loginForm.username}
                   onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
                   required
                 />
               </div>
               <div className="form-group">
+                <label>Mot de passe</label>
                 <input
                   type="password"
-                  placeholder="Mot de passe"
                   value={loginForm.password}
                   onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
                   required
                 />
               </div>
-              <button type="submit" className="submit-btn">
-                Se connecter
-              </button>
+              <div className="modal-actions">
+                <button type="button" className="cancel-btn" onClick={() => setShowLoginForm(false)}>
+                  Annuler
+                </button>
+                <button type="submit" className="submit-btn">
+                  <span>🔐</span>
+                  Se connecter
+                </button>
+              </div>
             </form>
           </div>
         </div>

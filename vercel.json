@@ -22,9 +22,5 @@
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
-  ],
-  "env": {
-    "MONGO_URL": "@mongo_url",
-    "REACT_APP_BACKEND_URL": "https://your-app-name.vercel.app"
-  }
+  ]
 }
